@@ -362,7 +362,13 @@ class UriBuilder {
 		while (!$currentRequest->isMainRequest()) {
 			$argumentNamespace = $currentRequest->getArgumentNamespace();
 			if ($argumentNamespace !== '') {
-				$arguments = array($argumentNamespace => $arguments);
+				# http://forge.typo3.org/issues/35790
+				if(strstr($argumentNamespace, 'viewhelpers-widget')) {
+                		    $arguments["@subpackage"] = NULL;
+                		    $arguments = $arguments;
+                		} else {
+                		    $arguments = array($argumentNamespace => $arguments);
+                		}
 			}
 			$currentRequest = $currentRequest->getParentRequest();
 		}
