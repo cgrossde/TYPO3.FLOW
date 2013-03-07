@@ -146,18 +146,7 @@ class ObjectConverter extends AbstractTypeConverter {
 	 * @throws \TYPO3\Flow\Property\Exception\InvalidPropertyMappingConfigurationException
 	 */
 	public function convertFrom($source, $targetType, array $convertedChildProperties = array(), \TYPO3\Flow\Property\PropertyMappingConfigurationInterface $configuration = NULL) {
-		$effectiveTargetType = $targetType;
-		if (isset($source['__type'])) {
-			if ($configuration->getConfigurationValue('TYPO3\Flow\Property\TypeConverter\ObjectConverter', self::CONFIGURATION_OVERRIDE_TARGET_TYPE_ALLOWED) !== TRUE) {
-				throw new \TYPO3\Flow\Property\Exception\InvalidPropertyMappingConfigurationException('Override of target type not allowed. To enable this, you need to set the PropertyMappingConfiguration Value "CONFIGURATION_OVERRIDE_TARGET_TYPE_ALLOWED" to TRUE.', 1317051258);
-			}
-			$effectiveTargetType = $source['__type'];
-		}
-		$object = $this->buildObject($convertedChildProperties, $effectiveTargetType);
-		if ($effectiveTargetType !== $targetType && !$object instanceof $targetType) {
-			throw new \TYPO3\Flow\Property\Exception\InvalidDataTypeException('The given type "' . $source['__type'] . '" is not a subtype of "' . $targetType .'"', 1317051266);
-		}
-
+		$object = $this->buildObject($convertedChildProperties, $targetType);
 		foreach ($convertedChildProperties as $propertyName => $propertyValue) {
 			$result = \TYPO3\Flow\Reflection\ObjectAccess::setProperty($object, $propertyName, $propertyValue);
 			if ($result === FALSE) {
@@ -172,6 +161,43 @@ class ObjectConverter extends AbstractTypeConverter {
 		}
 
 		return $object;
+	}
+
+	/**
+	 * Determines the target type based on the source's (optional) __type key.
+	 *
+	 * @param mixed $source
+	 * @param string $originalTargetType
+	 * @param \TYPO3\Flow\Property\PropertyMappingConfigurationInterface $configuration
+	 * @return string
+	 * @throws \TYPO3\Flow\Property\Exception\InvalidDataTypeException
+	 * @throws \TYPO3\Flow\Property\Exception\InvalidPropertyMappingConfigurationException
+	 * @throws \InvalidArgumentException
+	 */
+	public function getTargetTypeForSource($source, $originalTargetType, \TYPO3\Flow\Property\PropertyMappingConfigurationInterface $configuration = NULL) {
+		$targetType = $originalTargetType;
+
+		if (is_array($source) && array_key_exists('__type', $source)) {
+			$targetType = $source['__type'];
+
+			if ($configuration === NULL) {
+				throw new \InvalidArgumentException('A property mapping configuration must be given, not NULL.', 1326277369);
+			}
+			if ($configuration->getConfigurationValue('TYPO3\Flow\Property\TypeConverter\ObjectConverter', self::CONFIGURATION_OVERRIDE_TARGET_TYPE_ALLOWED) !== TRUE) {
+				throw new \TYPO3\Flow\Property\Exception\InvalidPropertyMappingConfigurationException('Override of target type not allowed. To enable this, you need to set the PropertyMappingConfiguration Value "CONFIGURATION_OVERRIDE_TARGET_TYPE_ALLOWED" to TRUE.', 1317050430);
+			}
+
+				// FIXME: The following check and the checkInheritanceChainWithoutIsA() method should be removed if we raise the PHP requirement to 5.3.9 or higher
+			if (version_compare(phpversion(), '5.3.8', '>')) {
+				if ($targetType !== $originalTargetType && is_a($targetType, $originalTargetType, TRUE) === FALSE) {
+					throw new \TYPO3\Flow\Property\Exception\InvalidDataTypeException('The given type "' . $targetType . '" is not a subtype of "' . $originalTargetType . '".', 1317048056);
+				}
+			} else {
+				$targetType = $this->checkInheritanceChainWithoutIsA($targetType, $originalTargetType);
+			}
+		}
+
+		return $targetType;
 	}
 
 	/**
@@ -206,6 +232,26 @@ class ObjectConverter extends AbstractTypeConverter {
 		} else {
 			return new $className();
 		}
+	}
+
+	/**
+	 * This is a replacement for the functionality provided by is_a() with 3 parameters which is only available from
+	 * PHP 5.3.9. It can be removed if the TYPO3.Flow PHP version requirement is raised to 5.3.9 or above.
+	 *
+	 * @param string $targetType
+	 * @param string $originalTargetType
+	 * @return string
+	 * @throws \TYPO3\Flow\Property\Exception\InvalidDataTypeException
+	 */
+	protected function checkInheritanceChainWithoutIsA($targetType, $originalTargetType) {
+		$targetTypeToCompare = $targetType;
+		do {
+			if ($targetTypeToCompare === $originalTargetType) {
+				return $targetType;
+			}
+		} while ($targetTypeToCompare = get_parent_class($targetTypeToCompare));
+
+		throw new \TYPO3\Flow\Property\Exception\InvalidDataTypeException('The given type "' . $targetType . '" is not a subtype of "' . $originalTargetType . '".', 1360928582);
 	}
 
 }

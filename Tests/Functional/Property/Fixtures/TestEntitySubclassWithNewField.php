@@ -1,5 +1,5 @@
 <?php
-namespace TYPO3\Flow\Security\Authentication\Token;
+namespace TYPO3\Flow\Tests\Functional\Property\Fixtures;
 
 /*                                                                        *
  * This script belongs to the TYPO3 Flow framework.                       *
@@ -14,29 +14,29 @@ namespace TYPO3\Flow\Security\Authentication\Token;
 use TYPO3\Flow\Annotations as Flow;
 
 /**
- * An authentication token used for functional tests
+ * A simple entity for PropertyMapper test
+ *
+ * @Flow\Entity
  */
-class TestingToken extends \TYPO3\Flow\Security\Authentication\Token\AbstractToken {
+class TestEntitySubclassWithNewField extends TestEntity {
 
 	/**
-	 * Simply sets the authentication status to AUTHENTICATION_NEEDED
-	 *
-	 * @param \TYPO3\Flow\Mvc\ActionRequest $actionRequest The current action request instance
-	 * @return void
-	 * @Flow\Session(autoStart=true)
+	 * @var string
 	 */
-	public function updateCredentials(\TYPO3\Flow\Mvc\ActionRequest $actionRequest) {
-		$this->authenticationStatus = self::AUTHENTICATION_NEEDED;
+	protected $testField;
+
+	/**
+	 * @param string $testField
+	 */
+	public function setTestField($testField) {
+		$this->testField = $testField;
 	}
 
 	/**
-	 * Returns a string representation of the token for logging purposes.
-	 *
-	 * @return string The username credential
+	 * @return string
 	 */
-	public function  __toString() {
-		return 'Testing token';
+	public function getTestField() {
+		return $this->testField;
 	}
-
 }
 ?>

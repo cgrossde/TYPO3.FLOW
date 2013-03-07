@@ -21,6 +21,28 @@ use TYPO3\Flow\Annotations as Flow;
 class JsonView extends \TYPO3\Flow\Mvc\View\AbstractView {
 
 	/**
+	 * Definition for the class name exposation configuration,
+	 * that is, if the class name of an object should also be
+	 * part of the output JSON, if configured.
+	 *
+	 * Setting this value, the object's class name is fully
+	 * put out, including the namespace.
+	 */
+	const EXPOSE_CLASSNAME_FULLY_QUALIFIED = 1;
+
+	/**
+	 * Puts out only the actual class name without namespace.
+	 * See EXPOSE_CLASSNAME_FULL for the meaning of the constant at all.
+	 */
+	const EXPOSE_CLASSNAME_UNQUALIFIED = 2;
+
+	/**
+	 * @Flow\Inject
+	 * @var \TYPO3\Flow\Reflection\ReflectionService
+	 */
+	protected $reflectionService;
+
+	/**
 	 * @var \TYPO3\Flow\Mvc\Controller\ControllerContext
 	 */
 	protected $controllerContext;
@@ -93,7 +115,8 @@ class JsonView extends \TYPO3\Flow\Mvc\View\AbstractView {
 	 * 					'_exposedObjectIdentifierKey' => 'guid'
 	 *				)
 	 *			)
-	 *		),
+	 *		)
+	 * )
 	 *
 	 * Note for entity objects you are able to expose the object's identifier
 	 * also, just add an "_exposeObjectIdentifier" directive set to TRUE and
@@ -102,6 +125,30 @@ class JsonView extends \TYPO3\Flow\Mvc\View\AbstractView {
 	 * possible with the directive "_exposedObjectIdentifierKey".
 	 * Example 2 above would output (summarized):
 	 * {"customer":{"firstName":"John","guid":"892693e4-b570-46fe-af71-1ad32918fb64"}}
+	 *
+	 *
+	 * Example 3: exposing object's class name
+	 *
+	 * array(
+	 *		'variableFoo' => array(
+	 *			'_exclude' => array('secretTitle'),
+	 *			'_descend' => array(
+	 *				'customer' => array(    // consider 'customer' being an object
+	 *					'_only' => array('firstName'),
+	 * 					'_exposeClassName' => TYPO3\Flow\Mvc\View\JsonView::EXPOSE_CLASSNAME_FULLY_QUALIFIED
+	 *				)
+	 *			)
+	 *		)
+	 * )
+	 *
+	 * The ``_exposeClassName`` is similar to the objectIdentifier one, but the class name is added to the
+	 * JSON object output, for example (summarized):
+	 * {"customer":{"firstName":"John","__class":"Acme\Foo\Domain\Model\Customer"}}
+	 *
+	 * The other option is EXPOSE_CLASSNAME_UNQUALIFIED which only will give the last part of the class
+	 * without the namespace, for example (summarized):
+	 * {"customer":{"firstName":"John","__class":"Customer"}}
+	 * This might be of interest to not provide information about the package or domain structure behind.
 	 *
 	 * @var array
 	 */
@@ -174,18 +221,22 @@ class JsonView extends \TYPO3\Flow\Mvc\View\AbstractView {
 	 * supplied configuration.
 	 *
 	 * @param mixed $value The value to transform
-	 * @param mixed $configuration Configuration for transforming the value or NULL
+	 * @param array $configuration Configuration for transforming the value
 	 * @return array The transformed value
 	 */
-	protected function transformValue($value, $configuration) {
+	protected function transformValue($value, array $configuration) {
 		if (is_array($value) || $value instanceof \ArrayAccess) {
 			$array = array();
 			foreach ($value as $key => $element) {
 				if (isset($configuration['_descendAll']) && is_array($configuration['_descendAll'])) {
 					$array[] = $this->transformValue($element, $configuration['_descendAll']);
 				} else {
-					if (isset($configuration['_only']) && is_array($configuration['_only']) && !in_array($key, $configuration['_only'])) continue;
-					if (isset($configuration['_exclude']) && is_array($configuration['_exclude']) && in_array($key, $configuration['_exclude'])) continue;
+					if (isset($configuration['_only']) && is_array($configuration['_only']) && !in_array($key, $configuration['_only'])) {
+						continue;
+					}
+					if (isset($configuration['_exclude']) && is_array($configuration['_exclude']) && in_array($key, $configuration['_exclude'])) {
+						continue;
+					}
 					$array[$key] = $this->transformValue($element, isset($configuration[$key]) ? $configuration[$key] : array());
 				}
 			}
@@ -202,12 +253,12 @@ class JsonView extends \TYPO3\Flow\Mvc\View\AbstractView {
 	 * array structure.
 	 *
 	 * @param object $object Object to traverse
-	 * @param mixed $configuration Configuration for transforming the given object or NULL
-	 * @return array Object structure as an aray
+	 * @param array $configuration Configuration for transforming the given object or NULL
+	 * @return array Object structure as an array
 	 */
-	protected function transformObject($object, $configuration) {
+	protected function transformObject($object, array $configuration) {
 		if ($object instanceof \DateTime) {
-			return $object->format('Y-m-d\TH:i:s');
+			return $object->format(\DateTime::ISO8601);
 		} else {
 			$propertyNames = \TYPO3\Flow\Reflection\ObjectAccess::getGettablePropertyNames($object);
 
@@ -232,6 +283,12 @@ class JsonView extends \TYPO3\Flow\Mvc\View\AbstractView {
 				}
 				$propertiesToRender[$identityKey] = $this->persistenceManager->getIdentifierByObject($object);
 			}
+			if (isset($configuration['_exposeClassName']) && ($configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_FULLY_QUALIFIED || $configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_UNQUALIFIED)) {
+				$className = $this->reflectionService->getClassNameByObject($object);
+				$classNameParts = explode('\\', $className);
+				$propertiesToRender['__class'] = ($configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_FULLY_QUALIFIED ? $className : array_pop($classNameParts));
+			}
+
 			return $propertiesToRender;
 		}
 	}

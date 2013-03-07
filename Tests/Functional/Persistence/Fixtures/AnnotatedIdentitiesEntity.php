@@ -1,5 +1,5 @@
 <?php
-namespace TYPO3\Flow\Security\Authentication\Token;
+namespace TYPO3\Flow\Tests\Functional\Persistence\Fixtures;
 
 /*                                                                        *
  * This script belongs to the TYPO3 Flow framework.                       *
@@ -12,30 +12,53 @@ namespace TYPO3\Flow\Security\Authentication\Token;
  *                                                                        */
 
 use TYPO3\Flow\Annotations as Flow;
+use Doctrine\ORM\Mapping as ORM;
 
 /**
- * An authentication token used for functional tests
+ * A sample entity that has properties with an Identity annotation
+ *
+ * @Flow\Entity
  */
-class TestingToken extends \TYPO3\Flow\Security\Authentication\Token\AbstractToken {
+class AnnotatedIdentitiesEntity {
 
 	/**
-	 * Simply sets the authentication status to AUTHENTICATION_NEEDED
-	 *
-	 * @param \TYPO3\Flow\Mvc\ActionRequest $actionRequest The current action request instance
-	 * @return void
-	 * @Flow\Session(autoStart=true)
+	 * @Flow\Identity
+	 * @var string
 	 */
-	public function updateCredentials(\TYPO3\Flow\Mvc\ActionRequest $actionRequest) {
-		$this->authenticationStatus = self::AUTHENTICATION_NEEDED;
+	protected $author;
+
+	/**
+	 * @Flow\Identity
+	 * @var string
+	 */
+	protected $title;
+
+	/**
+	 * @param string $author
+	 */
+	public function setAuthor($author) {
+		$this->author = $author;
 	}
 
 	/**
-	 * Returns a string representation of the token for logging purposes.
-	 *
-	 * @return string The username credential
+	 * @return string
 	 */
-	public function  __toString() {
-		return 'Testing token';
+	public function getAuthor() {
+		return $this->author;
+	}
+
+	/**
+	 * @param string $title
+	 */
+	public function setTitle($title) {
+		$this->title = $title;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getTitle() {
+		return $this->title;
 	}
 
 }

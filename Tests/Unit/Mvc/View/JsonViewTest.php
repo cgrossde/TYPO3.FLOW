@@ -11,6 +11,8 @@ namespace TYPO3\Flow\Tests\Unit\Mvc\View;
  * The TYPO3 project - inspiring people to share!                         *
  *                                                                        */
 
+use TYPO3\Flow\Mvc\View\JsonView;
+
 /**
  * Testcase for the JSON view
  *
@@ -128,10 +130,15 @@ class JsonViewTest extends \TYPO3\Flow\Tests\UnitTestCase {
 		$expected = array(array('value1' => 'foo'));
 		$output[] = array($value, $configuration, $expected, 'SplObjectStorage with objects should be serialized');
 
-		$dateTimeObject = new \DateTime('2011-02-03T03:15:23');
+		$dateTimeObject = new \DateTime('2011-02-03T03:15:23', new \DateTimeZone('UTC'));
 		$configuration = array();
-		$expected = '2011-02-03T03:15:23';
-		$output[] = array($dateTimeObject, $configuration, $expected, 'DateTime object could not be serialized.');
+		$expected = '2011-02-03T03:15:23+0000';
+		$output[] = array($dateTimeObject, $configuration, $expected, 'DateTime object in UTC time zone could not be serialized.');
+
+		$dateTimeObject = new \DateTime('2013-08-15T15:25:30', new \DateTimeZone('America/Los_Angeles'));
+		$configuration = array();
+		$expected = '2013-08-15T15:25:30-0700';
+		$output[] = array($dateTimeObject, $configuration, $expected, 'DateTime object in America/Los_Angeles time zone could not be serialized.');
 		return $output;
 	}
 
@@ -148,10 +155,10 @@ class JsonViewTest extends \TYPO3\Flow\Tests\UnitTestCase {
 	}
 
 	/**
-	 * data provider for testTransformValueWithObjectIdentifierExposation()
+	 * data provider for testTransformValueWithObjectIdentifierExposure()
 	 * @return array
 	 */
-	public function objectIdentifierExposationTestData() {
+	public function objectIdentifierExposureTestData() {
 		$output = array();
 
 		$dummyIdentifier = 'e4f40dfc-8c6e-4414-a5b1-6fd3c5cf7a53';
@@ -178,9 +185,9 @@ class JsonViewTest extends \TYPO3\Flow\Tests\UnitTestCase {
 
 	/**
 	 * @test
-	 * @dataProvider objectIdentifierExposationTestData
+	 * @dataProvider objectIdentifierExposureTestData
 	 */
-	public function testTransformValueWithObjectIdentifierExposation($object, $configuration, $expected, $dummyIdentifier, $description) {
+	public function testTransformValueWithObjectIdentifierExposure($object, $configuration, $expected, $dummyIdentifier, $description) {
 		$persistenceManagerMock = $this->getMock('TYPO3\Flow\Persistence\Generic\PersistenceManager', array('getIdentifierByObject'));
 		$jsonView = $this->getAccessibleMock('TYPO3\Flow\Mvc\View\JsonView', array('dummy'), array(), '', FALSE);
 		$jsonView->_set('persistenceManager', $persistenceManagerMock);
@@ -190,6 +197,60 @@ class JsonViewTest extends \TYPO3\Flow\Tests\UnitTestCase {
 		$actual = $jsonView->_call('transformValue', $object, $configuration);
 
 		$this->assertEquals($expected, $actual, $description);
+	}
+
+	/**
+	 * A data provider
+	 */
+	public function exposeClassNameSettingsAndResults() {
+		$className = 'DummyClass' . md5(uniqid(mt_rand(), TRUE));
+		$namespace = 'TYPO3\Flow\Tests\Unit\Mvc\View\\' . $className;
+		return array(
+			array(
+				JsonView::EXPOSE_CLASSNAME_FULLY_QUALIFIED,
+				$className,
+				$namespace,
+				array('value1' => array('__class' => $namespace . '\\' . $className))
+			),
+			array(
+				JsonView::EXPOSE_CLASSNAME_UNQUALIFIED,
+				$className,
+				$namespace,
+				array('value1' => array('__class' => $className))
+			),
+			array(
+				NULL,
+				$className,
+				$namespace,
+				array('value1' => array())
+			)
+		);
+	}
+
+	/**
+	 * @test
+	 * @dataProvider exposeClassNameSettingsAndResults
+	 */
+	public function viewExposesClassNameFullyIfConfiguredSo($exposeClassNameSetting, $className, $namespace, $expected) {
+		$fullyQualifiedClassName = $namespace . '\\' . $className;
+		if (class_exists($fullyQualifiedClassName) === FALSE) {
+			eval('namespace ' . $namespace . '; class ' . $className . ' {}');
+		}
+
+		$object = new \stdClass();
+		$object->value1 = new $fullyQualifiedClassName();
+		$configuration = array(
+			'_descend' => array(
+				 'value1' => array(
+					  '_exposeClassName' => $exposeClassNameSetting
+				 )
+			)
+		);
+		$reflectionService = new \TYPO3\Flow\Reflection\ReflectionService;
+		$jsonView = $this->getAccessibleMock('TYPO3\Flow\Mvc\View\JsonView', array('dummy'), array(), '', FALSE);
+		$this->inject($jsonView, 'reflectionService', $reflectionService);
+		$actual = $jsonView->_call('transformValue', $object, $configuration);
+		$this->assertEquals($expected, $actual);
 	}
 
 	/**
